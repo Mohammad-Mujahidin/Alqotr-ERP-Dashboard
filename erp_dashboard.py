@@ -4,46 +4,39 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
 import json
-import os
+from sqlalchemy import text
 
-st.set_page_config(page_title="لوحة متابعة نظام ERP", layout="wide", page_icon="📊", initial_sidebar_state="expanded")
+# --- الاتصال بقاعدة البيانات (Supabase) ---
+# ستقوم هذه الدالة تلقائياً بقراءة الرابط من ملف secrets.toml
+conn = st.connection("supabase", type="sql")
 
-# ── Files & Data Initialization ─────────────────────────
-DATA_FILE = "erp_data.json"
-USERS_FILE = "users.json"
+# ── Functions to Load/Save Data from SQL ─────────────────────────
+def load_json_from_db(doc_id):
+    # نستخدم ttl=0 لضمان جلب أحدث البيانات وعدم تخزينها في الكاش (Cache)
+    df = conn.query(f"SELECT doc_data FROM app_storage WHERE doc_id = '{doc_id}'", ttl=0)
+    if not df.empty and df.iloc[0]['doc_data']:
+        data = df.iloc[0]['doc_data']
+        # إذا تم إرجاعها كنص، نقوم بتحويلها، وإذا كانت قاموس (Dict) نستخدمها مباشرة
+        return data if isinstance(data, dict) else json.loads(data)
+    return {}
 
-def init_files():
-    if not os.path.exists(USERS_FILE):
-        default_users = {
-            "admin": {"password": "admin", "name": "مدير النظام", "role": "admin", "allowed_depts": ["الجميع"]},
-            "user": {"password": "123", "name": "أحمد (موظف)", "role": "editor", "allowed_depts": ["المالية"]}
-        }
-        with open(USERS_FILE, "w", encoding="utf-8") as f:
-            json.dump(default_users, f, ensure_ascii=False, indent=4)
-            
-    if not os.path.exists(DATA_FILE):
-        default_data = {
-            "المالية": {"total": 2, "completed": 0, "owner": "أحمد العمري", "prefix": "FIN", "requirements": [
-                {"id": "FIN-001", "title": "سير اعتماد الميزانية", "priority": "حرج", "status": "معلق", "history": []},
-                {"id": "FIN-002", "title": "دعم العملات المتعددة", "priority": "عالي", "status": "معلق", "history": []}
-            ]},
-            "الموارد البشرية": {"total": 1, "completed": 0, "owner": "سارة القحطاني", "prefix": "HR", "requirements": [
-                {"id": "HR-001", "title": "تكامل نظام الرواتب", "priority": "حرج", "status": "معلق", "history": []}
-            ]}
-        }
-        with open(DATA_FILE, "w", encoding="utf-8") as f:
-            json.dump(default_data, f, ensure_ascii=False, indent=4)
+def save_json_to_db(data, doc_id):
+    json_str = json.dumps(data, ensure_ascii=False)
+    # استخدام session لتنفيذ أمر التحديث (Update)
+    with conn.session as s:
+        s.execute(
+            text("UPDATE app_storage SET doc_data = :data WHERE doc_id = :id"),
+            {"data": json_str, "id": doc_id}
+        )
+        s.commit()
 
-init_files()
+# --- دوال التعامل مع البيانات في التطبيق ---
+def load_data(): return load_json_from_db('erp_data')
+def save_data(data): save_json_to_db(data, 'erp_data')
+def load_users(): return load_json_from_db('users')
+def save_users(users): save_json_to_db(users, 'users')
 
-def load_data():
-    with open(DATA_FILE, "r", encoding="utf-8") as f: return json.load(f)
-def save_data(data):
-    with open(DATA_FILE, "w", encoding="utf-8") as f: json.dump(data, f, ensure_ascii=False, indent=4)
-def load_users():
-    with open(USERS_FILE, "r", encoding="utf-8") as f: return json.load(f)
-def save_users(users):
-    with open(USERS_FILE, "w", encoding="utf-8") as f: json.dump(users, f, ensure_ascii=False, indent=4)
+# لا حاجة لدالة init_files لأننا وضعنا البيانات الافتراضية عبر كود الـ SQL
 
 def log_event(req, action):
     if "history" not in req:
