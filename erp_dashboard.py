@@ -6,37 +6,39 @@ from datetime import datetime
 import json
 from sqlalchemy import text
 
+st.set_page_config(page_title="لوحة متابعة نظام ERP", layout="wide", initial_sidebar_state="expanded")
+
 # --- الاتصال بقاعدة البيانات (Supabase) ---
-# ستقوم هذه الدالة تلقائياً بقراءة الرابط من ملف secrets.toml
 conn = st.connection("supabase", type="sql")
 
 # ── Functions to Load/Save Data from SQL ─────────────────────────
 def load_json_from_db(doc_id):
-    # نستخدم ttl=0 لضمان جلب أحدث البيانات وعدم تخزينها في الكاش (Cache)
-    df = conn.query(f"SELECT doc_data FROM app_storage WHERE doc_id = '{doc_id}'", ttl=0)
-    if not df.empty and df.iloc[0]['doc_data']:
-        data = df.iloc[0]['doc_data']
-        # إذا تم إرجاعها كنص، نقوم بتحويلها، وإذا كانت قاموس (Dict) نستخدمها مباشرة
-        return data if isinstance(data, dict) else json.loads(data)
+    try:
+        df = conn.query(f"SELECT doc_data FROM app_storage WHERE doc_id = '{doc_id}'", ttl=0)
+        if not df.empty and df.iloc[0]['doc_data']:
+            data = df.iloc[0]['doc_data']
+            return data if isinstance(data, dict) else json.loads(data)
+    except:
+        pass
     return {}
 
 def save_json_to_db(data, doc_id):
-    json_str = json.dumps(data, ensure_ascii=False)
-    # استخدام session لتنفيذ أمر التحديث (Update)
-    with conn.session as s:
-        s.execute(
-            text("UPDATE app_storage SET doc_data = :data WHERE doc_id = :id"),
-            {"data": json_str, "id": doc_id}
-        )
-        s.commit()
+    try:
+        json_str = json.dumps(data, ensure_ascii=False)
+        with conn.session as s:
+            s.execute(
+                text("UPDATE app_storage SET doc_data = :data WHERE doc_id = :id"),
+                {"data": json_str, "id": doc_id}
+            )
+            s.commit()
+    except Exception as e:
+        st.error(f"خطأ في الحفظ: {e}")
 
 # --- دوال التعامل مع البيانات في التطبيق ---
 def load_data(): return load_json_from_db('erp_data')
 def save_data(data): save_json_to_db(data, 'erp_data')
 def load_users(): return load_json_from_db('users')
 def save_users(users): save_json_to_db(users, 'users')
-
-# لا حاجة لدالة init_files لأننا وضعنا البيانات الافتراضية عبر كود الـ SQL
 
 def log_event(req, action):
     if "history" not in req:
@@ -111,6 +113,29 @@ h1, h2, h3, h4, h5, h6 {{ color: {text_color} !important; text-shadow: none !imp
 /* -- General Styling -- */
 .stTextInput input, .stSelectbox > div > div, .stMultiSelect > div > div, .stNumberInput input {{ background: {input_bg} !important; color: {text_color} !important; border: 1px solid {input_border} !important; border-radius: 8px !important; direction: rtl !important; }}
 .stTextInput input:disabled {{ background: rgba(128,128,128,0.1) !important; color: {text_muted} !important; }}
+
+/* ---------------------------------------------------
+   إصلاح حقول الاختيار المتعدد (Multiselect Tags Fix)
+   --------------------------------------------------- */
+span[data-baseweb="tag"] {{
+    background-color: rgba(74, 144, 217, 0.2) !important; /* لون هادئ بدلاً من الأحمر */
+    color: {text_color} !important;
+    border-radius: 4px !important;
+    padding-right: 8px !important;
+    padding-left: 28px !important; /* مساحة لعلامة الحذف (x) على اليسار */
+    border: 1px solid #4A90D9 !important;
+    font-size: 14px !important;
+}}
+span[data-baseweb="tag"] span[role="button"] {{
+    left: 4px !important;
+    right: auto !important;
+    padding: 2px !important;
+}}
+ul[role="listbox"] {{
+    direction: rtl !important;
+    text-align: right !important;
+}}
+
 div[data-testid="metric-container"] {{ background: {card_bg} !important; border: 1px solid {card_border} !important; border-radius: 12px !important; padding: 12px !important; direction: rtl !important; }}
 div[data-testid="stMetricLabel"], div[data-testid="stMetricValue"] {{ text-align: right !important; }}
 p, li, span {{ color: {text_muted}; }}
