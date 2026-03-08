@@ -317,17 +317,53 @@ if page == "⚙️ إدارة المستخدمين والنظام" and user_role
     # --- Tab 2: Departments Management ---
     with tab_depts:
         st.markdown("<div class='section-header'>تحديث بيانات الأقسام الحالية</div>", unsafe_allow_html=True)
-        up_dept = st.selectbox("القسم", all_depts_keys, key="up_dept")
+        up_dept = st.selectbox("القسم المراد تعديله", all_depts_keys, key="up_dept")
+        
         if up_dept:
             with st.form("update_dept"):
-                c1, c2 = st.columns(2)
-                with c1: owner = st.text_input("مسؤول القسم", value=data[up_dept].get("owner",""))
-                with c2: prefix = st.text_input("رمز القسم (Prefix)", value=data[up_dept].get("prefix","REQ"))
+                c1, c2, c3 = st.columns(3)
+                with c1: 
+                    # حقل جديد لتعديل اسم القسم
+                    new_dept_name = st.text_input("اسم القسم", value=up_dept)
+                with c2: 
+                    owner = st.text_input("مسؤول القسم", value=data[up_dept].get("owner",""))
+                with c3: 
+                    prefix = st.text_input("رمز القسم (Prefix)", value=data[up_dept].get("prefix","REQ"))
+                    
                 st.markdown("<div class='btn-primary'>", unsafe_allow_html=True)
                 if st.form_submit_button("💾 حفظ التحديثات"):
-                    data[up_dept]["owner"] = owner
-                    data[up_dept]["prefix"] = prefix
-                    save_data(data); st.success("تم التحديث!"); st.rerun()
+                    # إذا تم تغيير اسم القسم
+                    if new_dept_name and new_dept_name != up_dept:
+                        if new_dept_name in data:
+                            st.error("❌ يوجد قسم آخر بنفس الاسم، يرجى اختيار اسم مختلف.")
+                        else:
+                            # 1. نسخ بيانات القسم القديم إلى الاسم الجديد مع تحديث البيانات
+                            data[new_dept_name] = data.pop(up_dept)
+                            data[new_dept_name]["owner"] = owner
+                            data[new_dept_name]["prefix"] = prefix
+                            
+                            # 2. تحديث صلاحيات المستخدمين الذين كان مسموحاً لهم برؤية هذا القسم
+                            users = load_users()
+                            for u_id, u_info in users.items():
+                                if "allowed_depts" in u_info and up_dept in u_info["allowed_depts"]:
+                                    # استبدال الاسم القديم بالاسم الجديد في قائمة الصلاحيات
+                                    u_info["allowed_depts"] = [new_dept_name if d == up_dept else d for d in u_info["allowed_depts"]]
+                            save_users(users)
+                            
+                            # 3. تحديث صلاحيات المستخدم الحالي في الجلسة لتجنب الأخطاء
+                            if "allowed_depts" in st.session_state.user_info and up_dept in st.session_state.user_info["allowed_depts"]:
+                                st.session_state.user_info["allowed_depts"] = [new_dept_name if d == up_dept else d for d in st.session_state.user_info["allowed_depts"]]
+                            
+                            save_data(data)
+                            st.success("✅ تم تحديث اسم القسم وبياناته بنجاح!")
+                            st.rerun()
+                    else:
+                        # إذا لم يتغير اسم القسم، قم بتحديث المسؤول والرمز فقط
+                        data[up_dept]["owner"] = owner
+                        data[up_dept]["prefix"] = prefix
+                        save_data(data)
+                        st.success("✅ تم التحديث!")
+                        st.rerun()
                 st.markdown("</div>", unsafe_allow_html=True)
         
         st.markdown("<br><div class='section-header'>إضافة قسم جديد</div>", unsafe_allow_html=True)
@@ -339,8 +375,15 @@ if page == "⚙️ إدارة المستخدمين والنظام" and user_role
             st.markdown("<div class='btn-primary'>", unsafe_allow_html=True)
             if st.form_submit_button("➕ إضافة القسم"):
                 if nd_name and nd_pref:
-                    data[nd_name] = {"total": 0, "completed": 0, "owner": nd_owner, "prefix": nd_pref.upper(), "requirements": []}
-                    save_data(data); st.success("تم الإضافة!"); st.rerun()
+                    if nd_name in data:
+                        st.error("القسم موجود مسبقاً!")
+                    else:
+                        data[nd_name] = {"total": 0, "completed": 0, "owner": nd_owner, "prefix": nd_pref.upper(), "requirements": []}
+                        save_data(data)
+                        st.success("تم الإضافة!")
+                        st.rerun()
+                else:
+                    st.error("يرجى إدخال اسم القسم والرمز.")
             st.markdown("</div>", unsafe_allow_html=True)
 
     # --- Tab 3: Backup & Restore ---
