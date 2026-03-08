@@ -492,32 +492,76 @@ elif page == "📝 إدارة المتطلبات":
             return f"<span style='font-size:0.75rem; color:{text_muted}; display:block; margin-top:2px;'>📝 {last['action']} بواسطة: <b>{last['user']}</b> ({last['time']})</span>"
         return ""
 
+    # إدارة حالة التعديل في الجلسة (Session State)
+    if "edit_req_id" not in st.session_state:
+        st.session_state.edit_req_id = None
+
     st.markdown(f"**⏳ المتطلبات المعلقة ({len(pen_reqs)}):**")
     for r in pen_reqs:
-        c1, c2, c3, c4 = st.columns([1.2, 3, 1, 1])
-        c1.write(r["id"])
-        c2.markdown(f"{r['title']} {get_last_action(r)}", unsafe_allow_html=True)
-        if c3.button("✅ إنجاز", key=f"d_{r['id']}"):
-            r["status"] = "مكتمل"
-            log_event(r, "إنجاز")
-            data = recompute_stats(data)
-            save_data(data); st.rerun()
-        if c4.button("🗑️ حذف", key=f"del_{r['id']}"):
-            r["status"] = "محذوف"
-            log_event(r, "حذف")
-            data = recompute_stats(data)
-            save_data(data); st.rerun()
+        with st.container(border=True):
+            c1, c2, c3, c4, c5 = st.columns([1.2, 2.5, 1, 1, 1])
+            c1.write(r["id"])
+            c2.markdown(f"{r['title']} {get_last_action(r)}", unsafe_allow_html=True)
             
+            # أزرار الإجراءات
+            if c3.button("✏️ تعديل", key=f"edit_{r['id']}"):
+                st.session_state.edit_req_id = r['id']
+                st.rerun()
+            if c4.button("✅ إنجاز", key=f"d_{r['id']}"):
+                r["status"] = "مكتمل"
+                log_event(r, "إنجاز")
+                data = recompute_stats(data)
+                save_data(data); st.rerun()
+            if c5.button("🗑️ حذف", key=f"del_{r['id']}"):
+                r["status"] = "محذوف"
+                log_event(r, "حذف")
+                data = recompute_stats(data)
+                save_data(data); st.rerun()
+            
+            # نموذج التعديل (يظهر فقط إذا تم الضغط على زر تعديل لهذا المتطلب)
+            if st.session_state.edit_req_id == r['id']:
+                st.markdown(f"<div style='background:{input_bg}; padding:15px; border-radius:10px; border:1px solid #4A90D9; margin-top:10px; margin-bottom:10px;'>", unsafe_allow_html=True)
+                st.markdown(f"**تعديل المتطلب: {r['id']}**")
+                
+                with st.form(f"form_edit_req_{r['id']}"):
+                    edit_title = st.text_input("وصف المتطلب", value=r.get("title", ""))
+                    
+                    edit_prio_idx = ["حرج", "عالي", "متوسط", "منخفض"].index(r.get("priority", "متوسط")) if r.get("priority", "متوسط") in ["حرج", "عالي", "متوسط", "منخفض"] else 2
+                    edit_prio = st.selectbox("الأولوية", ["حرج", "عالي", "متوسط", "منخفض"], index=edit_prio_idx)
+                    
+                    edit_notes = st.text_area("الملاحظات", value=r.get("notes", ""), height=68)
+                    
+                    sc1, sc2 = st.columns([1, 4])
+                    if sc1.form_submit_button("💾 حفظ التعديلات"):
+                        if edit_title:
+                            r["title"] = edit_title
+                            r["priority"] = edit_prio
+                            r["notes"] = edit_notes
+                            log_event(r, "تعديل تفاصيل المتطلب")
+                            data = recompute_stats(data)
+                            save_data(data)
+                            st.session_state.edit_req_id = None
+                            st.success("تم تحديث المتطلب بنجاح!")
+                            st.rerun()
+                        else:
+                            st.error("الرجاء عدم ترك الوصف فارغاً.")
+                            
+                    if sc2.form_submit_button("❌ إلغاء"):
+                        st.session_state.edit_req_id = None
+                        st.rerun()
+                st.markdown("</div>", unsafe_allow_html=True)
+
     st.markdown(f"**✅ المتطلبات المكتملة ({len(com_reqs)}):**")
     for r in com_reqs:
-        c1, c2, c3 = st.columns([1.2, 4, 1])
-        c1.write(r["id"])
-        c2.markdown(f"~~{r['title']}~~ {get_last_action(r)}", unsafe_allow_html=True)
-        if c3.button("↩️ التراجع", key=f"u_{r['id']}"):
-            r["status"] = "معلق"
-            log_event(r, "تراجع (إعادة لمعلق)")
-            data = recompute_stats(data)
-            save_data(data); st.rerun()
+        with st.container(border=True):
+            c1, c2, c3 = st.columns([1.2, 4, 1])
+            c1.write(r["id"])
+            c2.markdown(f"~~{r['title']}~~ {get_last_action(r)}", unsafe_allow_html=True)
+            if c3.button("↩️ التراجع", key=f"u_{r['id']}"):
+                r["status"] = "معلق"
+                log_event(r, "تراجع (إعادة لمعلق)")
+                data = recompute_stats(data)
+                save_data(data); st.rerun()
 
     st.markdown(f"**🗑️ سلة المحذوفات ({len(del_reqs)}):**")
     with st.container(border=True):
