@@ -606,30 +606,36 @@ elif page == "📊 لوحة المتابعة":
         selected_dept = st.selectbox("اختر القسم", list(filtered_data.keys()))
         if selected_dept:
             dept = filtered_data[selected_dept]
-            all_reqs = [r for r in dept.get("requirements", []) if r.get("priority") in priority_filter and r.get("status") != "محذوف"]
-            pending_reqs = [r for r in all_reqs if r.get("status") == "معلق"]
-            completed_reqs = [r for r in all_reqs if r.get("status") == "مكتمل"]
+            
+            # المشكلة غالباً كانت هنا: تم التعديل لتضمين جميع المتطلبات حتى لو كان فيها خطأ في الأولوية
+            all_reqs = [r for r in dept.get("requirements", []) if r.get("status") != "محذوف"]
+            
+            # فلترة حسب الأولويات المختارة في القائمة الجانبية
+            filtered_reqs = [r for r in all_reqs if r.get("priority") in priority_filter]
+            
+            pending_reqs = [r for r in filtered_reqs if r.get("status") == "معلق"]
+            completed_reqs = [r for r in filtered_reqs if r.get("status") == "مكتمل"]
             
             priority_icons = {"حرج":"🔴", "عالي":"🟠", "متوسط":"🟡", "منخفض":"🟢"}
             badge_classes = {"حرج":"badge-critical", "عالي":"badge-high", "متوسط":"badge-medium", "منخفض":"badge-low"}
 
-            tab_pending, tab_completed = st.tabs([f"المعلقة ({len(pending_reqs)})", f"المكتملة ({len(completed_reqs)})"])
+            # استخدام حاويات خارجية لتجنب مشكلة الـ Tabs في Streamlit
+            st.markdown(f"### المعلقة ({len(pending_reqs)})")
             
             def render_reqs(req_list, is_completed=False):
                 if not req_list:
-                    st.info("لا توجد متطلبات هنا.")
+                    st.info("لا توجد متطلبات هنا تطابق التصفية الحالية.")
                     return
                 for r in req_list:
-                    with st.container():
+                    with st.container(border=True):
                         c1, c2, c3, c4, c5 = st.columns([1.2, 4.5, 1.5, 1.5, 1.5])
                         with c1: st.markdown(f"<p style='color:{text_muted}; font-family:monospace'>{r.get('id', '')}</p>", unsafe_allow_html=True)
                         with c2: 
                             st.markdown(f"<p style='color:{text_color}; {'text-decoration:line-through' if is_completed else ''}; margin-bottom: 2px;'>{r.get('title', '')}</p>", unsafe_allow_html=True)
-                            # --- عرض الملاحظات تحت العنوان مباشرة إن وجدت ---
                             if r.get('notes'):
                                 st.markdown(f"<p style='color:{text_muted}; font-size:0.8rem; margin-top: 0px;'>📝 <i>{r.get('notes')}</i></p>", unsafe_allow_html=True)
                                 
-                        with c3: st.markdown(f"<span class='badge {badge_classes.get(r.get('priority', 'متوسط'))}'>{priority_icons.get(r.get('priority', 'متوسط'))} {r.get('priority', '')}</span>", unsafe_allow_html=True)
+                        with c3: st.markdown(f"<span class='badge {badge_classes.get(r.get('priority', 'متوسط'))}'>{priority_icons.get(r.get('priority', 'متوسط'))} {r.get('priority', 'متوسط')}</span>", unsafe_allow_html=True)
                         with c4: st.markdown(f"<span style='color:{'#27AE60' if is_completed else '#F39C12'}'>{'✅ مكتمل' if is_completed else '⏳ معلق'}</span>", unsafe_allow_html=True)
                         with c5:
                             btn_label = "إخفاء السجل" if r['id'] in st.session_state.show_audit_for else "📋 السجل"
@@ -639,15 +645,18 @@ elif page == "📊 لوحة المتابعة":
                                 st.rerun()
                                 
                         if r['id'] in st.session_state.show_audit_for:
-                            st.markdown(f"<div style='background:{input_bg}; padding:10px; border-radius:8px; margin-bottom:10px; border:1px solid {card_border}; font-size:0.85rem;'>", unsafe_allow_html=True)
+                            st.markdown(f"<div style='background:{input_bg}; padding:10px; border-radius:8px; margin-top:10px; border:1px solid {card_border}; font-size:0.85rem;'>", unsafe_allow_html=True)
                             if "history" in r and r["history"]:
                                 for h in r["history"]:
                                     st.markdown(f"<span style='color:{text_muted}'>- {h.get('action', '')} بواسطة <b>{h.get('user', '')}</b> في {h.get('time', '')}</span><br>", unsafe_allow_html=True)
                             else:
                                 st.markdown("<span style='color:#F39C12'>لا يوجد سجل تتبع قديم لهذا المتطلب</span>", unsafe_allow_html=True)
                             st.markdown("</div>", unsafe_allow_html=True)
-                            
-                    st.markdown(f"<hr style='margin:4px 0; border-color:{hr_color}'>", unsafe_allow_html=True)
+
+            render_reqs(pending_reqs, False)
+            
+            st.markdown(f"### المكتملة ({len(completed_reqs)})")
+            render_reqs(completed_reqs, True)
 
 st.divider()
 st.markdown(f"<p style='text-align:center; color:{text_muted}; font-size:0.75rem'>لوحة متابعة نظام ERP • فريق تقنية المعلومات • {datetime.now().strftime('%Y-%m-%d')}</p>", unsafe_allow_html=True)
