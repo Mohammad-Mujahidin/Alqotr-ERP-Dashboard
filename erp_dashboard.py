@@ -412,15 +412,20 @@ elif page == "📝 إدارة المتطلبات":
     
     with st.form("add_req_form", clear_on_submit=True):
         col1, col2 = st.columns(2)
-        with col1: req_title = st.text_input("وصف المتطلب (Title)")
+        with col1: 
+            req_title = st.text_input("وصف المتطلب (Title)")
         with col2:
             st.text_input("رقم المتطلب (تلقائي)", value=auto_req_id, disabled=True)
             req_prio = st.selectbox("الأولوية", ["حرج", "عالي", "متوسط", "منخفض"])
+            
+        # --- إضافة حقل الملاحظات هنا ---
+        req_notes = st.text_area("ملاحظات إضافية (اختياري)", height=68, placeholder="اكتب أي ملاحظات أو تفاصيل إضافية هنا...")
         
         st.markdown("<div class='btn-primary'>", unsafe_allow_html=True)
         if st.form_submit_button("➕ إضافة المتطلب"):
             if req_title:
-                new_req = {"id": auto_req_id, "title": req_title, "priority": req_prio, "status": "معلق"}
+                # --- تضمين الملاحظة في القاموس الجديد ---
+                new_req = {"id": auto_req_id, "title": req_title, "priority": req_prio, "status": "معلق", "notes": req_notes}
                 log_event(new_req, "إنشاء")
                 data[dept_sel]["requirements"].append(new_req)
                 data = recompute_stats(data)
@@ -575,7 +580,12 @@ elif page == "📊 لوحة المتابعة":
                     with st.container():
                         c1, c2, c3, c4, c5 = st.columns([1.2, 4.5, 1.5, 1.5, 1.5])
                         with c1: st.markdown(f"<p style='color:{text_muted}; font-family:monospace'>{r.get('id', '')}</p>", unsafe_allow_html=True)
-                        with c2: st.markdown(f"<p style='color:{text_color}; {'text-decoration:line-through' if is_completed else ''}'>{r.get('title', '')}</p>", unsafe_allow_html=True)
+                        with c2: 
+                            st.markdown(f"<p style='color:{text_color}; {'text-decoration:line-through' if is_completed else ''}; margin-bottom: 2px;'>{r.get('title', '')}</p>", unsafe_allow_html=True)
+                            # --- عرض الملاحظات تحت العنوان مباشرة إن وجدت ---
+                            if r.get('notes'):
+                                st.markdown(f"<p style='color:{text_muted}; font-size:0.8rem; margin-top: 0px;'>📝 <i>{r.get('notes')}</i></p>", unsafe_allow_html=True)
+                                
                         with c3: st.markdown(f"<span class='badge {badge_classes.get(r.get('priority', 'متوسط'))}'>{priority_icons.get(r.get('priority', 'متوسط'))} {r.get('priority', '')}</span>", unsafe_allow_html=True)
                         with c4: st.markdown(f"<span style='color:{'#27AE60' if is_completed else '#F39C12'}'>{'✅ مكتمل' if is_completed else '⏳ معلق'}</span>", unsafe_allow_html=True)
                         with c5:
@@ -595,9 +605,6 @@ elif page == "📊 لوحة المتابعة":
                             st.markdown("</div>", unsafe_allow_html=True)
                             
                     st.markdown(f"<hr style='margin:4px 0; border-color:{hr_color}'>", unsafe_allow_html=True)
-
-            with tab_pending: render_reqs(pending_reqs, False)
-            with tab_completed: render_reqs(completed_reqs, True)
 
 st.divider()
 st.markdown(f"<p style='text-align:center; color:{text_muted}; font-size:0.75rem'>لوحة متابعة نظام ERP • فريق تقنية المعلومات • {datetime.now().strftime('%Y-%m-%d')}</p>", unsafe_allow_html=True)
